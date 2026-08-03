@@ -1,0 +1,3 @@
+export type Farm = { id: string; name: string; primary_species: string; created_at: string }
+export type Animal = { id: string; farm_id: string; call_name: string; registered_name: string | null; species: string; breed: string | null; sex: string; status: string; birth_date: string | null; primary_id: string | null; created_at: string }
+export type StudListing = { id: string; farm_id: string; boar_name: string; stud_name: string; breed: string | null; sire_name: string | null; dam_name: string | null; registration_number: string | null; registration_association: string | null; semen_price: number | null; source_url: string | null; strengths: string | null; notes: string | null; availability_status: string; created_at: string }
