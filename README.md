@@ -51,8 +51,23 @@ Precision Herd Management — Swine is a dedicated swine application. Other live
 - Restore archived animals and litters to active sections
 - Guarded permanent deletion for animals, individual litter pigs, and erroneous whole litters
 
+## Package 2.3 deferred litter sire update (v0.3.2)
+
+- Assign or change the recorded sire from the Litter Details page
+- Uses the existing Boar Library, including the option to leave the sire unknown
+- Refreshes the litter heading, archive view, and NSR/CPS export data after saving
+- Application-only update with no new Supabase migration
+
+## Package 2.4 sow summary and reproductive status (v0.3.3)
+
+- Age in years/months on Herd Animals
+- Parity calculated from each sow's recorded farrowing/litter history
+- Reproductive-status designation on Herd Animals
+- Animal Profile dropdown for Open, Bred, and Lactating/Nursing
+- Conditional due date for Bred sows/gilts
+
 ## Planned Package 3
 
 - Health protocols, sickness cases, treatments, withdrawals, tasks, and reports
 
-New installations run the four migrations in filename order. Existing v0.3.0 installations use [PACKAGE-2.2-INSTALL.md](PACKAGE-2.2-INSTALL.md).
+New installations run the five migrations in filename order. Existing v0.3.1 installations can use the cumulative [PACKAGE-2.4-INSTALL.md](PACKAGE-2.4-INSTALL.md).

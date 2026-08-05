@@ -6,24 +6,26 @@ import { exportCpsBreedingCertificate, exportCpsLitterApplication, exportNsrBree
 import { formatDate } from '../lib/terminology'
 import type { Animal, BirthEvent, Farm, LitterPig, OffspringGroup, RegistryProfile, StudListing } from '../types/database'
 
-type LoadedLitter = OffspringGroup & { birth_event: BirthEvent & { female: Animal }; sire: StudListing | null }
+type LoadedLitter = Omit<OffspringGroup,'birth_event'|'sire'> & { birth_event: BirthEvent & { female: Animal }; sire: StudListing | null }
 
 export default function LitterProfile({farm}:{farm:Farm}) {
   const navigate=useNavigate()
   const {id}=useParams(),[litter,setLitter]=useState<LoadedLitter|null>(null),[pigs,setPigs]=useState<LitterPig[]>([])
+  const [boars,setBoars]=useState<StudListing[]>([])
   const [profiles,setProfiles]=useState<RegistryProfile[]>([]),[registrations,setRegistrations]=useState<RegistrationRecord[]>([]),[breedingDate,setBreedingDate]=useState<string|null>(null)
   const [message,setMessage]=useState(''),[salePig,setSalePig]=useState<LitterPig|null>(null)
   async function load(){
     const {data:group}=await supabase.from('offspring_groups').select('*,birth_event:birth_events!offspring_groups_birth_event_id_fkey(*,female:animals!birth_events_female_animal_id_fkey(*)),sire:stud_listings!offspring_groups_sire_listing_id_fkey(*)').eq('id',id).eq('farm_id',farm.id).single()
     if(!group)return
     const damId=group.birth_event.female_animal_id
-    const [pigRows,profileRows,regRows,breedingRows]=await Promise.all([
+    const [pigRows,boarRows,profileRows,regRows,breedingRows]=await Promise.all([
       supabase.from('litter_pigs').select('*').eq('offspring_group_id',id).eq('farm_id',farm.id).order('sequence_number'),
+      supabase.from('stud_listings').select('*').eq('farm_id',farm.id).order('boar_name'),
       supabase.from('farm_registry_profiles').select('*').eq('farm_id',farm.id),
       supabase.from('registrations').select('association,registration_number,registered_name').eq('farm_id',farm.id).eq('animal_id',damId),
       supabase.from('breeding_events').select('event_date').eq('farm_id',farm.id).eq('female_animal_id',damId).lte('event_date',`${group.birth_date}T23:59:59`).order('event_date',{ascending:false}).limit(1),
     ])
-    setLitter(group as LoadedLitter);setPigs(pigRows.data||[]);setProfiles(profileRows.data||[]);setRegistrations(regRows.data||[]);setBreedingDate(breedingRows.data?.[0]?.event_date?.slice(0,10)||null)
+    setLitter(group as LoadedLitter);setPigs(pigRows.data||[]);setBoars(boarRows.data||[]);setProfiles(profileRows.data||[]);setRegistrations(regRows.data||[]);setBreedingDate(breedingRows.data?.[0]?.event_date?.slice(0,10)||null)
   }
   useEffect(()=>{load()},[id,farm.id])
   if(!litter)return <p>Loading litter…</p>
@@ -35,10 +37,14 @@ export default function LitterProfile({farm}:{farm:Farm}) {
     e.preventDefault();setMessage('')
     const {error}=await supabase.from('offspring_groups').update({
       group_name:current.group_name,registry_association:current.registry_association||null,breed:current.breed||null,litter_notch:current.litter_notch||null,litter_number:current.litter_number||null,
+      sire_listing_id:current.sire_listing_id||null,
       parity:current.parity||null,litter_birth_weight:current.litter_birth_weight||null,number_after_transfer:current.number_after_transfer||null,number_weighed:current.number_weighed||null,
       litter_weaning_weight:current.litter_weaning_weight||null,weaning_date:current.weaning_date||null,estrus_date:current.estrus_date||null,boar_group_name:current.boar_group_name||null,gilt_group_name:current.gilt_group_name||null,notes:current.notes||null,updated_at:new Date().toISOString(),
     }).eq('id',current.id)
-    setMessage(error?.message||'Litter details saved.')
+    if(error){setMessage(error.message);return}
+    const {error:birthError}=await supabase.from('birth_events').update({sire_listing_id:current.sire_listing_id||null}).eq('id',birth.id)
+    setMessage(birthError?.message||'Litter details saved.')
+    if(!birthError)load()
   }
   async function addPig(){
     const next=(pigs.at(-1)?.sequence_number||0)+1
@@ -90,6 +96,7 @@ export default function LitterProfile({farm}:{farm:Farm}) {
     <form className="panel form-grid" onSubmit={saveHeader}>
       <h2 className="full">Litter details</h2>
       <Input label="Litter name" value={litter.group_name} onChange={v=>setLitter({...litter,group_name:v})}/><label>Association<select value={litter.registry_association||''} onChange={e=>setLitter({...litter,registry_association:e.target.value||null})}><option value="">Not selected</option><option>NSR</option><option>CPS</option><option>Other</option></select></label>
+      <label>Recorded sire<select value={litter.sire_listing_id||''} onChange={e=>{const sireId=e.target.value||null;setLitter({...litter,sire_listing_id:sireId,sire:boars.find(boar=>boar.id===sireId)||null})}}><option value="">Unknown / enter later</option>{boars.map(boar=><option value={boar.id} key={boar.id}>{boar.boar_name} - {boar.stud_name}</option>)}</select><small className="muted">Sires are managed in the Boar Library under Boar Selection.</small></label><div/>
       <Input label="Breed" value={litter.breed||''} onChange={v=>setLitter({...litter,breed:v})}/><Input label="Litter ear notch" value={litter.litter_notch||''} onChange={v=>setLitter({...litter,litter_notch:v})}/><Input label="Litter number" value={litter.litter_number||''} onChange={v=>setLitter({...litter,litter_number:v})}/><Input label="Parity" type="number" min="1" value={litter.parity||''} onChange={v=>setLitter({...litter,parity:numberOrNull(v)})}/>
       <Input label="Litter birth weight (LBW)" type="number" min="0" step=".01" value={litter.litter_birth_weight||''} onChange={v=>setLitter({...litter,litter_birth_weight:numberOrNull(v)})}/><Input label="Number after transfer (NAT)" type="number" min="0" value={litter.number_after_transfer||''} onChange={v=>setLitter({...litter,number_after_transfer:numberOrNull(v)})}/><Input label="Number weighed (NW)" type="number" min="0" value={litter.number_weighed||''} onChange={v=>setLitter({...litter,number_weighed:numberOrNull(v)})}/><Input label="Litter weaning weight (LWW)" type="number" min="0" step=".01" value={litter.litter_weaning_weight||''} onChange={v=>setLitter({...litter,litter_weaning_weight:numberOrNull(v)})}/>
       <Input label="Weaning date" type="date" value={litter.weaning_date||''} onChange={v=>setLitter({...litter,weaning_date:v||null})}/><Input label="Estrus date" type="date" value={litter.estrus_date||''} onChange={v=>setLitter({...litter,estrus_date:v||null})}/><Input label="Boar group name" value={litter.boar_group_name||''} onChange={v=>setLitter({...litter,boar_group_name:v})}/><Input label="Gilt group name" value={litter.gilt_group_name||''} onChange={v=>setLitter({...litter,gilt_group_name:v})}/>

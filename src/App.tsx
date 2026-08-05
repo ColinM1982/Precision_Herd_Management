@@ -76,15 +76,36 @@ function Dashboard({ farm }: { farm: Farm }) {
 function Stat({label,value}:{label:string;value:string|number}) { return <div className="stat"><strong>{value}</strong><span>{label}</span></div> }
 
 function Animals({ farm }: { farm: Farm }) {
-  const [items,setItems]=useState<Animal[]>([]), [show,setShow]=useState(false)
-  async function load(){const {data}=await supabase.from('animals').select('*').eq('farm_id',farm.id).in('status',['active','for_sale']).order('call_name');setItems(data||[])}
+  const [items,setItems]=useState<Animal[]>([]), [parity,setParity]=useState<Record<string,number>>({}), [show,setShow]=useState(false)
+  async function load(){
+    const [{data:animals},{data:births}]=await Promise.all([
+      supabase.from('animals').select('*').eq('farm_id',farm.id).in('status',['active','for_sale']).order('call_name'),
+      supabase.from('birth_events').select('female_animal_id').eq('farm_id',farm.id)
+    ])
+    setItems(animals||[])
+    setParity((births||[]).reduce<Record<string,number>>((counts,birth)=>{counts[birth.female_animal_id]=(counts[birth.female_animal_id]||0)+1;return counts},{}))
+  }
   useEffect(()=>{load()},[farm.id])
-  return <><PageHead eyebrow="ACTIVE SWINE HERD RECORDS" title="Herd Animals" action={<button className="button primary" onClick={()=>setShow(true)}>+ Add animal</button>}/><p className="lead">Sold, culled, deceased, and archived animals are retained under Outside the Herd.</p>{items.length ? <div className="card-grid">{items.map(a=><Link className="animal-card" to={`/animals/${a.id}`} key={a.id}><div className="avatar"><PiggyBank/></div><div><span className="pill">{a.status}</span><h3>{a.call_name}</h3><p>{[a.breed,a.sex,a.primary_id].filter(Boolean).join(' • ')}</p>{a.registered_name&&<small>{a.registered_name}</small>}</div></Link>)}</div>:<Empty icon={<PiggyBank/>} title="No active herd animals" text="Add your first animal or restore one from Outside the Herd."/>}{show&&<AnimalModal farm={farm} close={()=>setShow(false)} saved={()=>{setShow(false);load()}}/>}</>
+  return <><PageHead eyebrow="ACTIVE SWINE HERD RECORDS" title="Herd Animals" action={<button className="button primary" onClick={()=>setShow(true)}>+ Add animal</button>}/><p className="lead">Sold, culled, deceased, and archived animals are retained under Outside the Herd.</p>{items.length ? <div className="card-grid">{items.map(a=>{const female=['sow','gilt'].includes(a.sex);return <Link className="animal-card" to={`/animals/${a.id}`} key={a.id}><div className="animal-card-head"><div className="avatar"><PiggyBank/></div><div><span className="pill">{a.status}</span><h3>{a.call_name}</h3><p>{[a.breed,a.sex,a.primary_id].filter(Boolean).join(' • ')}</p>{a.registered_name&&<small>{a.registered_name}</small>}</div></div><div className="animal-card-metrics"><span><small>Age</small><strong>{formatAge(a.birth_date)}</strong></span>{female&&<><span><small>Parity</small><strong>{parity[a.id]||0} {parity[a.id]===1?'litter':'litters'}</strong></span><span><small>Reproductive status</small><strong>{reproductiveStatusLabel(a.reproductive_status)}</strong>{a.reproductive_status==='bred'&&a.reproductive_due_date&&<em>Due {formatShortDate(a.reproductive_due_date)}</em>}</span></>}</div></Link>})}</div>:<Empty icon={<PiggyBank/>} title="No active herd animals" text="Add your first animal or restore one from Outside the Herd."/>}{show&&<AnimalModal farm={farm} close={()=>setShow(false)} saved={()=>{setShow(false);load()}}/>}</>
 }
+
+function formatAge(value:string|null){
+  if(!value)return 'Not recorded'
+  const born=new Date(`${value}T00:00:00`),today=new Date()
+  let months=(today.getFullYear()-born.getFullYear())*12+today.getMonth()-born.getMonth()
+  if(today.getDate()<born.getDate())months--
+  if(months<0)return 'Not recorded'
+  const years=Math.floor(months/12),remaining=months%12
+  if(!years)return `${remaining} mo`
+  return remaining?`${years} yr ${remaining} mo`:`${years} yr`
+}
+
+function reproductiveStatusLabel(value:string|null){return value==='bred'?'Bred':value==='lactating_nursing'?'Lactating/Nursing':'Open'}
+function formatShortDate(value:string){return new Date(`${value}T00:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}
 
 function AnimalModal({farm,close,saved}:{farm:Farm;close:()=>void;saved:()=>void}) {
   const [v,setV]=useState({call_name:'',registered_name:'',breed:'',sex:'sow',primary_id:'',birth_date:''}), [error,setError]=useState('')
-  async function submit(e:FormEvent){e.preventDefault();const {error}=await supabase.from('animals').insert({farm_id:farm.id,species:'swine',status:'active',...v,birth_date:v.birth_date||null});if(error)setError(error.message);else saved()}
+  async function submit(e:FormEvent){e.preventDefault();const {error}=await supabase.from('animals').insert({farm_id:farm.id,species:'swine',status:'active',...v,birth_date:v.birth_date||null,reproductive_status:['sow','gilt'].includes(v.sex)?'open':null});if(error)setError(error.message);else saved()}
   return <Modal title="Add animal" close={close}><form onSubmit={submit} className="form-grid"><Field label="Call name" value={v.call_name} onChange={x=>setV({...v,call_name:x})} required/><Field label="Registered name" value={v.registered_name} onChange={x=>setV({...v,registered_name:x})}/><Field label="Breed" value={v.breed} onChange={x=>setV({...v,breed:x})}/><label>Sex/class<select value={v.sex} onChange={e=>setV({...v,sex:e.target.value})}><option>sow</option><option>gilt</option><option>boar</option><option>barrow</option></select></label><Field label="Primary ID / ear tag" value={v.primary_id} onChange={x=>setV({...v,primary_id:x})}/><Field label="Birth date" type="date" value={v.birth_date} onChange={x=>setV({...v,birth_date:x})}/>{error&&<p className="error full">{error}</p>}<div className="form-actions full"><button type="button" className="button secondary" onClick={close}>Cancel</button><button className="button primary">Save animal</button></div></form></Modal>
 }
 

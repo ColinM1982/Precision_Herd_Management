@@ -24,7 +24,9 @@ export default function AnimalProfile({ farm }: { farm: Farm }) {
     e.preventDefault(); setMessage(''); if (!animal) return
     const current = animal
     const archived=['sold','culled','deceased','archived'].includes(current.status)
-    const { error } = await supabase.from('animals').update({ call_name: current.call_name, registered_name: current.registered_name || null, breed: current.breed || null, sex: current.sex, reproductive_status: current.reproductive_status || null, status: current.status, status_date:archived?(current.status_date||new Date().toISOString().slice(0,10)):null, birth_date: current.birth_date || null, primary_id: current.primary_id || null, ear_notch: current.ear_notch || null, color_markings: current.color_markings || null, sire_id: current.sire_id || null, dam_id: current.dam_id || null, notes: current.notes || null, updated_at: new Date().toISOString() }).eq('id', current.id)
+    const female=['sow','gilt'].includes(current.sex)
+    const reproductiveStatus=female?(current.reproductive_status||'open'):null
+    const { error } = await supabase.from('animals').update({ call_name: current.call_name, registered_name: current.registered_name || null, breed: current.breed || null, sex: current.sex, reproductive_status: reproductiveStatus, reproductive_due_date:reproductiveStatus==='bred'?(current.reproductive_due_date||null):null, status: current.status, status_date:archived?(current.status_date||new Date().toISOString().slice(0,10)):null, birth_date: current.birth_date || null, primary_id: current.primary_id || null, ear_notch: current.ear_notch || null, color_markings: current.color_markings || null, sire_id: current.sire_id || null, dam_id: current.dam_id || null, notes: current.notes || null, updated_at: new Date().toISOString() }).eq('id', current.id)
     setMessage(error?.message || 'Animal profile saved.')
   }
   async function remove(){
@@ -51,7 +53,8 @@ export default function AnimalProfile({ farm }: { farm: Farm }) {
         <label>Status<select value={animal.status} onChange={e=>setAnimal({...animal,status:e.target.value})}><option>active</option><option>for_sale</option><option>sold</option><option>culled</option><option>deceased</option><option>archived</option></select></label>
         {['sold','culled','deceased','archived'].includes(animal.status)?<Input label="Status date" type="date" value={animal.status_date||''} onChange={v=>setAnimal({...animal,status_date:v||null})}/>:<div/>}
         <Input label="Birth date" type="date" value={animal.birth_date || ''} onChange={v=>setAnimal({...animal,birth_date:v})}/>
-        <Input label="Reproductive status" value={animal.reproductive_status || ''} onChange={v=>setAnimal({...animal,reproductive_status:v})}/>
+        {['sow','gilt'].includes(animal.sex)?<label>Reproductive status<select value={animal.reproductive_status||'open'} onChange={e=>setAnimal({...animal,reproductive_status:e.target.value,reproductive_due_date:e.target.value==='bred'?animal.reproductive_due_date:null})}><option value="open">Open</option><option value="bred">Bred</option><option value="lactating_nursing">Lactating/Nursing</option></select></label>:<div/>}
+        {['sow','gilt'].includes(animal.sex)&&animal.reproductive_status==='bred'?<Input label="Due date" type="date" value={animal.reproductive_due_date||''} onChange={v=>setAnimal({...animal,reproductive_due_date:v||null})}/>:<div/>}
         <Input label="Color and markings" value={animal.color_markings || ''} onChange={v=>setAnimal({...animal,color_markings:v})}/>
         <div/>
         <label>Sire in your herd<select value={animal.sire_id || ''} onChange={e=>setAnimal({...animal,sire_id:e.target.value || null})}><option value="">Outside/unknown sire</option>{herd.filter(x=>x.id!==animal.id && ['boar'].includes(x.sex)).map(x=><option value={x.id} key={x.id}>{x.call_name}</option>)}</select></label>
