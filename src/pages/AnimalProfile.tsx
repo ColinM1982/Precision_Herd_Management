@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { ArrowLeft, Dna, FileBadge, GitFork, Save } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft, Dna, FileBadge, GitFork, Save, Trash2 } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Animal, Farm } from '../types/database'
 
 type Registration = { id: string; association: string; registration_number: string; registered_name: string | null; transfer_status: string | null }
 
 export default function AnimalProfile({ farm }: { farm: Farm }) {
+  const navigate=useNavigate()
   const { id } = useParams(), [animal, setAnimal] = useState<Animal | null>(null), [herd, setHerd] = useState<Animal[]>([])
   const [registrations, setRegistrations] = useState<Registration[]>([]), [message, setMessage] = useState('')
   async function load() {
@@ -22,8 +23,17 @@ export default function AnimalProfile({ farm }: { farm: Farm }) {
   async function save(e: FormEvent) {
     e.preventDefault(); setMessage(''); if (!animal) return
     const current = animal
-    const { error } = await supabase.from('animals').update({ call_name: current.call_name, registered_name: current.registered_name || null, breed: current.breed || null, sex: current.sex, reproductive_status: current.reproductive_status || null, status: current.status, birth_date: current.birth_date || null, primary_id: current.primary_id || null, ear_notch: current.ear_notch || null, color_markings: current.color_markings || null, sire_id: current.sire_id || null, dam_id: current.dam_id || null, notes: current.notes || null, updated_at: new Date().toISOString() }).eq('id', current.id)
+    const archived=['sold','culled','deceased','archived'].includes(current.status)
+    const { error } = await supabase.from('animals').update({ call_name: current.call_name, registered_name: current.registered_name || null, breed: current.breed || null, sex: current.sex, reproductive_status: current.reproductive_status || null, status: current.status, status_date:archived?(current.status_date||new Date().toISOString().slice(0,10)):null, birth_date: current.birth_date || null, primary_id: current.primary_id || null, ear_notch: current.ear_notch || null, color_markings: current.color_markings || null, sire_id: current.sire_id || null, dam_id: current.dam_id || null, notes: current.notes || null, updated_at: new Date().toISOString() }).eq('id', current.id)
     setMessage(error?.message || 'Animal profile saved.')
+  }
+  async function remove(){
+    if(!animal)return
+    const current=animal
+    if(!window.confirm(`Permanently delete ${current.call_name}? This is only for an animal entered in error. Linked identification, registration, reproduction, and litter records may also be deleted. This cannot be undone.`))return
+    if(!window.confirm(`Final confirmation: permanently erase ${current.call_name}?`))return
+    const{error}=await supabase.rpc('delete_animal_permanently',{p_animal_id:current.id})
+    if(error)setMessage(error.message);else navigate('/animals',{replace:true})
   }
   const sire = herd.find(x => x.id === animal.sire_id), dam = herd.find(x => x.id === animal.dam_id)
   return <>
@@ -39,6 +49,7 @@ export default function AnimalProfile({ farm }: { farm: Farm }) {
         <Input label="Breed" value={animal.breed || ''} onChange={v=>setAnimal({...animal,breed:v})}/>
         <label>Sex/class<select value={animal.sex} onChange={e=>setAnimal({...animal,sex:e.target.value})}><option>sow</option><option>gilt</option><option>boar</option><option>barrow</option><option>piglet</option><option>unknown</option></select></label>
         <label>Status<select value={animal.status} onChange={e=>setAnimal({...animal,status:e.target.value})}><option>active</option><option>for_sale</option><option>sold</option><option>culled</option><option>deceased</option><option>archived</option></select></label>
+        {['sold','culled','deceased','archived'].includes(animal.status)?<Input label="Status date" type="date" value={animal.status_date||''} onChange={v=>setAnimal({...animal,status_date:v||null})}/>:<div/>}
         <Input label="Birth date" type="date" value={animal.birth_date || ''} onChange={v=>setAnimal({...animal,birth_date:v})}/>
         <Input label="Reproductive status" value={animal.reproductive_status || ''} onChange={v=>setAnimal({...animal,reproductive_status:v})}/>
         <Input label="Color and markings" value={animal.color_markings || ''} onChange={v=>setAnimal({...animal,color_markings:v})}/>
@@ -47,7 +58,7 @@ export default function AnimalProfile({ farm }: { farm: Farm }) {
         <label>Dam in your herd<select value={animal.dam_id || ''} onChange={e=>setAnimal({...animal,dam_id:e.target.value || null})}><option value="">Outside/unknown dam</option>{herd.filter(x=>x.id!==animal.id && ['sow','gilt'].includes(x.sex)).map(x=><option value={x.id} key={x.id}>{x.call_name}</option>)}</select></label>
         <label className="full">Notes<textarea value={animal.notes || ''} onChange={e=>setAnimal({...animal,notes:e.target.value})}/></label>
         {message && <p className="notice full">{message}</p>}
-        <div className="form-actions full"><button className="button primary"><Save size={16}/> Save profile</button></div>
+        <div className="form-actions split-actions full"><button type="button" className="button danger" onClick={remove}><Trash2 size={16}/> Delete animal</button><button className="button primary"><Save size={16}/> Save profile</button></div>
       </form>
       <div>
         <section className="panel pedigree-card"><h2><GitFork size={20}/> Pedigree</h2><div><span>Sire</span><strong>{sire?.call_name || animal.sire_name || 'Not recorded'}</strong></div><div><span>Dam</span><strong>{dam?.call_name || animal.dam_name || 'Not recorded'}</strong></div></section>

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { Activity, Baby, CalendarDays, HeartPulse, Home, Menu, PiggyBank, Settings, X } from 'lucide-react'
+import { Activity, Archive, Baby, CalendarDays, HeartPulse, Home, Menu, PiggyBank, Settings, X } from 'lucide-react'
 import { isConfigured, supabase } from './lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 import type { Animal, Farm, RegistryProfile, StudListing } from './types/database'
@@ -9,10 +9,11 @@ import BoarSelection from './pages/BoarSelection'
 import Reproduction from './pages/Reproduction'
 import Litters from './pages/Litters'
 import LitterProfile from './pages/LitterProfile'
+import OutsideHerd from './pages/OutsideHerd'
 
 const nav = [
   ['/', 'Dashboard', Home], ['/animals', 'Animals', PiggyBank], ['/planning', 'Boar Selection', CalendarDays],
-  ['/breeding', 'Reproduction', Activity], ['/litters', 'Litters', Baby], ['/health', 'Health', HeartPulse], ['/settings', 'Settings', Settings]
+  ['/breeding', 'Reproduction', Activity], ['/litters', 'Litters', Baby], ['/outside-herd', 'Outside the Herd', Archive], ['/health', 'Health', HeartPulse], ['/settings', 'Settings', Settings]
 ] as const
 
 function App() {
@@ -55,7 +56,7 @@ function AuthenticatedApp() {
   useEffect(() => { loadFarm() }, [])
   if (loading) return <div className="center"><div className="spinner" /></div>
   if (!farm) return <FarmOnboarding onCreated={loadFarm} />
-  return <div className="app-shell"><aside className={mobile ? 'sidebar open' : 'sidebar'}><div className="side-head"><Brand /><button className="icon-button mobile-only" onClick={() => setMobile(false)}><X /></button></div><nav>{nav.map(([to,label,Icon]) => <NavLink key={to} to={to} end={to === '/'} onClick={() => setMobile(false)}><Icon size={19}/>{label}</NavLink>)}</nav><div className="side-footer"><span>{farm.name}</span><button className="text-button" onClick={() => supabase.auth.signOut()}>Sign out</button></div></aside><main className="content"><header className="mobile-header"><button className="icon-button" onClick={() => setMobile(true)}><Menu /></button><Brand /></header><Routes><Route path="/" element={<Dashboard farm={farm}/>} /><Route path="/animals" element={<Animals farm={farm}/>} /><Route path="/animals/:id" element={<AnimalProfile farm={farm}/>} /><Route path="/planning" element={<BoarSelection farm={farm}/>} /><Route path="/breeding" element={<Reproduction farm={farm}/>} /><Route path="/litters" element={<Litters farm={farm}/>} /><Route path="/litters/:id" element={<LitterProfile farm={farm}/>} /><Route path="/health" element={<ComingSoon title="Health" text="Routine protocols, illness cases, treatments, withdrawals, and reminders arrive in Package 3."/>} /><Route path="/settings" element={<SettingsPage farm={farm}/>} /><Route path="*" element={<Navigate to="/"/>}/></Routes></main></div>
+  return <div className="app-shell"><aside className={mobile ? 'sidebar open' : 'sidebar'}><div className="side-head"><Brand /><button className="icon-button mobile-only" onClick={() => setMobile(false)}><X /></button></div><nav>{nav.map(([to,label,Icon]) => <NavLink key={to} to={to} end={to === '/'} onClick={() => setMobile(false)}><Icon size={19}/>{label}</NavLink>)}</nav><div className="side-footer"><span>{farm.name}</span><button className="text-button" onClick={() => supabase.auth.signOut()}>Sign out</button></div></aside><main className="content"><header className="mobile-header"><button className="icon-button" onClick={() => setMobile(true)}><Menu /></button><Brand /></header><Routes><Route path="/" element={<Dashboard farm={farm}/>} /><Route path="/animals" element={<Animals farm={farm}/>} /><Route path="/animals/:id" element={<AnimalProfile farm={farm}/>} /><Route path="/planning" element={<BoarSelection farm={farm}/>} /><Route path="/breeding" element={<Reproduction farm={farm}/>} /><Route path="/litters" element={<Litters farm={farm}/>} /><Route path="/litters/:id" element={<LitterProfile farm={farm}/>} /><Route path="/outside-herd" element={<OutsideHerd farm={farm}/>} /><Route path="/health" element={<ComingSoon title="Health" text="Routine protocols, illness cases, treatments, withdrawals, and reminders arrive in Package 3."/>} /><Route path="/settings" element={<SettingsPage farm={farm}/>} /><Route path="*" element={<Navigate to="/"/>}/></Routes></main></div>
 }
 
 function FarmOnboarding({ onCreated }: { onCreated: () => void }) {
@@ -76,9 +77,9 @@ function Stat({label,value}:{label:string;value:string|number}) { return <div cl
 
 function Animals({ farm }: { farm: Farm }) {
   const [items,setItems]=useState<Animal[]>([]), [show,setShow]=useState(false)
-  async function load(){const {data}=await supabase.from('animals').select('*').eq('farm_id',farm.id).order('call_name');setItems(data||[])}
+  async function load(){const {data}=await supabase.from('animals').select('*').eq('farm_id',farm.id).in('status',['active','for_sale']).order('call_name');setItems(data||[])}
   useEffect(()=>{load()},[farm.id])
-  return <><PageHead eyebrow="SWINE HERD RECORDS" title="Animals" action={<button className="button primary" onClick={()=>setShow(true)}>+ Add animal</button>}/>{items.length ? <div className="card-grid">{items.map(a=><Link className="animal-card" to={`/animals/${a.id}`} key={a.id}><div className="avatar"><PiggyBank/></div><div><span className="pill">{a.status}</span><h3>{a.call_name}</h3><p>{[a.breed,a.sex,a.primary_id].filter(Boolean).join(' • ')}</p>{a.registered_name&&<small>{a.registered_name}</small>}</div></Link>)}</div>:<Empty icon={<PiggyBank/>} title="No animals entered yet" text="Add your first sow, gilt, boar, barrow, or show pig."/>}{show&&<AnimalModal farm={farm} close={()=>setShow(false)} saved={()=>{setShow(false);load()}}/>}</>
+  return <><PageHead eyebrow="ACTIVE SWINE HERD RECORDS" title="Herd Animals" action={<button className="button primary" onClick={()=>setShow(true)}>+ Add animal</button>}/><p className="lead">Sold, culled, deceased, and archived animals are retained under Outside the Herd.</p>{items.length ? <div className="card-grid">{items.map(a=><Link className="animal-card" to={`/animals/${a.id}`} key={a.id}><div className="avatar"><PiggyBank/></div><div><span className="pill">{a.status}</span><h3>{a.call_name}</h3><p>{[a.breed,a.sex,a.primary_id].filter(Boolean).join(' • ')}</p>{a.registered_name&&<small>{a.registered_name}</small>}</div></Link>)}</div>:<Empty icon={<PiggyBank/>} title="No active herd animals" text="Add your first animal or restore one from Outside the Herd."/>}{show&&<AnimalModal farm={farm} close={()=>setShow(false)} saved={()=>{setShow(false);load()}}/>}</>
 }
 
 function AnimalModal({farm,close,saved}:{farm:Farm;close:()=>void;saved:()=>void}) {

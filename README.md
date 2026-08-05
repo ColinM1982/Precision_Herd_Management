@@ -41,8 +41,18 @@ Precision Herd Management — Swine is a dedicated swine application. Other live
 - Explicit Move to Herd action for selected litter pigs
 - NSR and CPS registration/certificate CSV exports
 
+## Package 2.2 archive and record cleanup (v0.3.1)
+
+- Active Herd Animals separated from historical Outside the Herd records
+- Automatic routing of sold, culled, deceased, and archived animals
+- Separate historical view for terminal litter-pig outcomes
+- Completed-litter archive after every pig has a final outcome or enters Herd Animals
+- Archived litters retain pig details and NSR/CPS exports
+- Restore archived animals and litters to active sections
+- Guarded permanent deletion for animals, individual litter pigs, and erroneous whole litters
+
 ## Planned Package 3
 
 - Health protocols, sickness cases, treatments, withdrawals, tasks, and reports
 
-New installations run the three migrations in filename order. Existing Package 2 installations use [PACKAGE-2.1-INSTALL.md](PACKAGE-2.1-INSTALL.md).
+New installations run the four migrations in filename order. Existing v0.3.0 installations use [PACKAGE-2.2-INSTALL.md](PACKAGE-2.2-INSTALL.md).

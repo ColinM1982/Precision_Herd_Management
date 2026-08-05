@@ -1,4 +1,4 @@
-# Precision Herd Management - Swine v0.3.0 Installation Guide
+# Precision Herd Management - Swine v0.3.1 Installation Guide
 
 This guide assumes you will deploy the application the same general way as Precision Feed Management: GitHub stores the code, Supabase stores secured data, and Netlify builds the public application.
 
@@ -16,7 +16,7 @@ You need accounts for GitHub, Supabase, and Netlify. Keep the extracted project 
 6. On the empty repository page, choose **uploading an existing file**.
 7. Open the extracted `PRECISION-HERD-MANAGEMENT` folder on your computer.
 8. Upload all visible files and folders, including `src` and `supabase`. GitHub's browser upload may not accept an empty folder, but this package contains files in every required folder.
-9. Use the commit message `Install Precision Herd Management v0.3.0` and commit directly to `main`.
+9. Use the commit message `Install Precision Herd Management v0.3.1` and commit directly to `main`.
 
 ### Confirm the GitHub structure
 
@@ -31,7 +31,7 @@ The repository root should show `package.json`, `netlify.toml`, `src`, and `supa
 5. Choose the closest available United States region.
 6. Create the project and wait until provisioning finishes.
 
-### Run the three migrations in order
+### Run the four migrations in order
 
 1. In Supabase, open **SQL Editor**.
 2. Select **New query**.
@@ -39,20 +39,22 @@ The repository root should show `package.json`, `netlify.toml`, `src`, and `supa
 4. Copy the entire file into Supabase SQL Editor and select **Run** once.
 5. Open a new query, copy `supabase/migrations/202608030002_package_2_reproduction.sql`, and select **Run** once.
 6. Open another new query, copy `supabase/migrations/202608040003_animal_centered_reproduction.sql`, and select **Run** once.
-7. Each successful migration normally reports `Success. No rows returned`.
+7. Open another new query, copy `supabase/migrations/202608050004_outside_herd_archive_and_deletion.sql`, and select **Run** once.
+8. Each successful migration normally reports `Success. No rows returned`.
 
 Do not run any migration a second time. Future database changes will arrive as new timestamped files under `supabase/migrations`.
 
 ### Verify the migration
 
 1. Open a second new query in SQL Editor.
-2. Copy and run each verification file in order: `01_VERIFY_PACKAGE_1.sql`, `02_VERIFY_PACKAGE_2.sql`, and `03_VERIFY_ANIMAL_CENTERED_REPRODUCTION.sql`.
+2. Copy and run each verification file in order: `01_VERIFY_PACKAGE_1.sql`, `02_VERIFY_PACKAGE_2.sql`, `03_VERIFY_ANIMAL_CENTERED_REPRODUCTION.sql`, and `04_VERIFY_OUTSIDE_HERD_ARCHIVE.sql`.
 3. Confirm:
    - `rowsecurity` is `true` for every listed table.
    - `create_farm_with_owner`, `is_farm_member`, and `can_manage_farm` appear.
    - Policies appear for `farm_members`, `animals`, and `stud_listings`.
    - All four storage buckets appear and `public` is `false`.
 4. In the final v0.3.0 verification, confirm all ten checks show `PASS`, the three new tables show `rowsecurity = true`, and the three new policies appear. Zero data counts are normal.
+5. In the v0.3.1 verification, confirm all six checks show `PASS`. Archive counts may be zero.
 
 ### Authentication settings
 
@@ -157,4 +159,4 @@ Never rerun an older migration to apply a new update. The timestamped files prov
 
 ## Current release boundary
 
-Health protocols, sickness cases, treatments, withdrawals, tasks, and health reports remain planned for Package 3. The v0.3.0 source includes animal-centered reproduction, independent litters, sale/retention actions, and NSR/CPS CSV exports.
+Health protocols, sickness cases, treatments, withdrawals, tasks, and health reports remain planned for Package 3. The v0.3.1 source includes animal-centered reproduction, independent litters, Outside the Herd history, completed-litter archiving, guarded deletion, and NSR/CPS CSV exports.

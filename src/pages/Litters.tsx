@@ -9,7 +9,7 @@ export default function Litters({farm}:{farm:Farm}) {
   const [litters,setLitters]=useState<OffspringGroup[]>([])
   async function load(){
     const [{data:groups},{data:pigs}] = await Promise.all([
-      supabase.from('offspring_groups').select('*,birth_event:birth_events!offspring_groups_birth_event_id_fkey(*,female:animals!birth_events_female_animal_id_fkey(*)),sire:stud_listings!offspring_groups_sire_listing_id_fkey(*)').eq('farm_id',farm.id).order('birth_date',{ascending:false}),
+      supabase.from('offspring_groups').select('*,birth_event:birth_events!offspring_groups_birth_event_id_fkey(*,female:animals!birth_events_female_animal_id_fkey(*)),sire:stud_listings!offspring_groups_sire_listing_id_fkey(*)').eq('farm_id',farm.id).is('archived_at',null).order('birth_date',{ascending:false}),
       supabase.from('litter_pigs').select('offspring_group_id').eq('farm_id',farm.id),
     ])
     const counts=(pigs||[]).reduce<Record<string,number>>((all,row)=>({...all,[row.offspring_group_id]:(all[row.offspring_group_id]||0)+1}),{})
@@ -18,7 +18,7 @@ export default function Litters({farm}:{farm:Farm}) {
   useEffect(()=>{load()},[farm.id])
   return <>
     <div className="page-head"><div><p className="eyebrow">SEPARATE OFFSPRING RECORDS</p><h1>Litters</h1></div></div>
-    <p className="lead">Litter pigs stay here until you deliberately move an individual animal into the managed herd.</p>
+    <p className="lead">Litter pigs stay here until you deliberately move an individual animal into the managed herd. Completed litters can be moved to Outside the Herd.</p>
     {litters.length?<div className="litter-grid">{litters.map(litter=>{
       const birth=litter.birth_event
       return <Link to={`/litters/${litter.id}`} className="litter-card" key={litter.id}>
