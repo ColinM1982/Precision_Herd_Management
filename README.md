@@ -1,4 +1,4 @@
-# Precision Herd Management — Swine
+# Precision Herd Management - Swine
 
 Precision Herd Management — Swine is a dedicated swine application. Other livestock species will use separate applications so their registrations, reproductive workflows, reports, and exports can be designed independently.
 
@@ -30,8 +30,19 @@ Precision Herd Management — Swine is a dedicated swine application. Other live
 - Farrowing outcomes
 - Atomic litter and individual piglet creation
 
+## Package 2.1 animal-centered reproduction (v0.3.0)
+
+- Heat history with 18-21 day projected windows
+- Target farrow date with automatic 114-day target breeding date
+- Direct sow/gilt synchronization, breeding, pregnancy, and farrowing records
+- Independent Boar Library and direct mating comparisons
+- Separate Litters section; new litter pigs are not Herd Animals
+- Individual ear notch, class, teats, birth/weaning, status, sale, and retention records
+- Explicit Move to Herd action for selected litter pigs
+- NSR and CPS registration/certificate CSV exports
+
 ## Planned Package 3
 
 - Health protocols, sickness cases, treatments, withdrawals, tasks, and reports
 
-New installations start with [INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md). Existing Package 1 installations use [PACKAGE-2-INSTALL.md](PACKAGE-2-INSTALL.md).
+New installations run the three migrations in filename order. Existing Package 2 installations use [PACKAGE-2.1-INSTALL.md](PACKAGE-2.1-INSTALL.md).

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { ArrowLeft, FileBadge, GitFork, Save } from 'lucide-react'
+import { ArrowLeft, Dna, FileBadge, GitFork, Save } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Animal, Farm } from '../types/database'
@@ -22,19 +22,20 @@ export default function AnimalProfile({ farm }: { farm: Farm }) {
   async function save(e: FormEvent) {
     e.preventDefault(); setMessage(''); if (!animal) return
     const current = animal
-    const { error } = await supabase.from('animals').update({ call_name: current.call_name, registered_name: current.registered_name || null, breed: current.breed || null, sex: current.sex, reproductive_status: current.reproductive_status || null, status: current.status, birth_date: current.birth_date || null, primary_id: current.primary_id || null, color_markings: current.color_markings || null, sire_id: current.sire_id || null, dam_id: current.dam_id || null, notes: current.notes || null, updated_at: new Date().toISOString() }).eq('id', current.id)
+    const { error } = await supabase.from('animals').update({ call_name: current.call_name, registered_name: current.registered_name || null, breed: current.breed || null, sex: current.sex, reproductive_status: current.reproductive_status || null, status: current.status, birth_date: current.birth_date || null, primary_id: current.primary_id || null, ear_notch: current.ear_notch || null, color_markings: current.color_markings || null, sire_id: current.sire_id || null, dam_id: current.dam_id || null, notes: current.notes || null, updated_at: new Date().toISOString() }).eq('id', current.id)
     setMessage(error?.message || 'Animal profile saved.')
   }
   const sire = herd.find(x => x.id === animal.sire_id), dam = herd.find(x => x.id === animal.dam_id)
   return <>
     <Link className="back-link" to="/animals"><ArrowLeft size={17}/> Back to animals</Link>
-    <div className="page-head"><div><p className="eyebrow">FULL ANIMAL PROFILE</p><h1>{animal.call_name}</h1><p className="lead">{[animal.registered_name, animal.breed, animal.sex].filter(Boolean).join(' • ')}</p></div><span className="pill">{animal.status}</span></div>
+    <div className="page-head"><div><p className="eyebrow">FULL ANIMAL PROFILE</p><h1>{animal.call_name}</h1><p className="lead">{[animal.registered_name, animal.breed, animal.sex].filter(Boolean).join(' • ')}</p></div>{['sow','gilt'].includes(animal.sex)?<Link className="button secondary" to={`/breeding?female=${animal.id}`}><Dna size={17}/> Open reproduction planner</Link>:<span className="pill">{animal.status}</span>}</div>
     <div className="profile-layout">
       <form className="panel form-grid" onSubmit={save}>
         <h2 className="full">Identification & details</h2>
         <Input label="Call name" value={animal.call_name} onChange={v=>setAnimal({...animal,call_name:v})}/>
         <Input label="Registered name" value={animal.registered_name || ''} onChange={v=>setAnimal({...animal,registered_name:v})}/>
         <Input label="Primary ID / ear tag" value={animal.primary_id || ''} onChange={v=>setAnimal({...animal,primary_id:v})}/>
+        <Input label="Universal ear notch" value={animal.ear_notch || ''} onChange={v=>setAnimal({...animal,ear_notch:v})}/>
         <Input label="Breed" value={animal.breed || ''} onChange={v=>setAnimal({...animal,breed:v})}/>
         <label>Sex/class<select value={animal.sex} onChange={e=>setAnimal({...animal,sex:e.target.value})}><option>sow</option><option>gilt</option><option>boar</option><option>barrow</option><option>piglet</option><option>unknown</option></select></label>
         <label>Status<select value={animal.status} onChange={e=>setAnimal({...animal,status:e.target.value})}><option>active</option><option>for_sale</option><option>sold</option><option>culled</option><option>deceased</option><option>archived</option></select></label>
