@@ -1,4 +1,4 @@
-# Precision Herd Management - Swine v0.3.3 Installation Guide
+# Precision Herd Management - Swine v0.4.0 Installation Guide
 
 This guide assumes you will deploy the application the same general way as Precision Feed Management: GitHub stores the code, Supabase stores secured data, and Netlify builds the public application.
 
@@ -16,7 +16,7 @@ You need accounts for GitHub, Supabase, and Netlify. Keep the extracted project 
 6. On the empty repository page, choose **uploading an existing file**.
 7. Open the extracted `PRECISION-HERD-MANAGEMENT` folder on your computer.
 8. Upload all visible files and folders, including `src` and `supabase`. GitHub's browser upload may not accept an empty folder, but this package contains files in every required folder.
-9. Use the commit message `Install Precision Herd Management v0.3.3` and commit directly to `main`.
+9. Use the commit message `Install Precision Herd Management v0.4.0` and commit directly to `main`.
 
 ### Confirm the GitHub structure
 
@@ -31,7 +31,7 @@ The repository root should show `package.json`, `netlify.toml`, `src`, and `supa
 5. Choose the closest available United States region.
 6. Create the project and wait until provisioning finishes.
 
-### Run the five migrations in order
+### Run the six migrations in order
 
 1. In Supabase, open **SQL Editor**.
 2. Select **New query**.
@@ -41,6 +41,7 @@ The repository root should show `package.json`, `netlify.toml`, `src`, and `supa
 6. Open another new query, copy `supabase/migrations/202608040003_animal_centered_reproduction.sql`, and select **Run** once.
 7. Open another new query, copy `supabase/migrations/202608050004_outside_herd_archive_and_deletion.sql`, and select **Run** once.
 8. Open another new query, copy `supabase/migrations/202608050005_reproductive_status_summary.sql`, and select **Run** once.
+9. Open another new query, copy `supabase/migrations/202608050006_package_3_health_and_workflow.sql`, and select **Run** once.
 9. Each successful migration normally reports `Success. No rows returned`.
 
 Do not run any migration a second time. Future database changes will arrive as new timestamped files under `supabase/migrations`.
@@ -57,6 +58,7 @@ Do not run any migration a second time. Future database changes will arrive as n
 4. In the final v0.3.0 verification, confirm all ten checks show `PASS`, the three new tables show `rowsecurity = true`, and the three new policies appear. Zero data counts are normal.
 5. In the v0.3.1 database verification, confirm all six checks show `PASS`. Archive counts may be zero. The v0.3.2 sire-selector update requires no additional SQL.
 6. In the v0.3.3 verification, confirm all five checks show `PASS`. Reproductive-status counts and due-date counts are informational.
+7. Run `supabase/verify/06_VERIFY_PACKAGE_3_HEALTH_AND_WORKFLOW.sql` and confirm all eight checks show `PASS`.
 
 ### Authentication settings
 
@@ -161,4 +163,4 @@ Never rerun an older migration to apply a new update. The timestamped files prov
 
 ## Current release boundary
 
-Health protocols, sickness cases, treatments, withdrawals, tasks, and health reports remain planned for Package 3. The v0.3.3 source includes animal-centered reproduction, independent litters, deferred sire assignment, sow age/parity/reproductive summaries, Outside the Herd history, completed-litter archiving, guarded deletion, and NSR/CPS CSV exports.
+The v0.4.0 source includes animal-centered reproduction, independent litters, deferred sire assignment, sow age/parity/reproductive summaries, Archived Animals/Litters history, completed-litter archiving, guarded deletion, NSR/CPS CSV exports, Matrix/PG 600 planning, and herd-wide treatment records. Broader health protocols, reminders, inventory, and reports can build on this Package 3 foundation.

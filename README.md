@@ -66,8 +66,16 @@ Precision Herd Management — Swine is a dedicated swine application. Other live
 - Animal Profile dropdown for Open, Bred, and Lactating/Nursing
 - Conditional due date for Bred sows/gilts
 
-## Planned Package 3
+## Package 3 health and workflow expansion (v0.4.0)
 
-- Health protocols, sickness cases, treatments, withdrawals, tasks, and reports
+- Directly editable animal pedigree and controlled swine breed selections
+- Crossbred profiles without registration panels
+- Litter Total $ earned and sow Lifetime $ Sold calculations
+- Single-date 19-day heat projections and selectable future cycles
+- Two-way 114-day Target Breeding / Target Farrow calculations
+- Matrix/PG 600 15-day calendar with linked heat, breeding, and farrowing dates
+- Organized Archived Animals/Litters folders
+- Categorized Boar Selection list, profiles, and guarded deletion
+- Herd-wide treatment table with expandable animal history and withdrawal dates
 
-New installations run the five migrations in filename order. Existing v0.3.1 installations can use the cumulative [PACKAGE-2.4-INSTALL.md](PACKAGE-2.4-INSTALL.md).
+New installations run the six migrations in filename order. Existing v0.3.3 installations use [PACKAGE-3-INSTALL.md](PACKAGE-3-INSTALL.md).

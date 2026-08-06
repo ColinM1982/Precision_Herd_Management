@@ -2,8 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Baby, CalendarClock, CheckCircle2, Dna, Flame, Plus, Syringe, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { expectedFarrowDate, formatDate, heatWindow, nowLocal, targetBreedingDate, today } from '../lib/terminology'
-import type { Animal, BreedingEvent, Farm, HeatEvent, MatingPlan, PregnancyCheck, StudListing } from '../types/database'
+import { addDays, expectedFarrowDate, formatDate, nowLocal, projectedHeatDate, targetBreedingDate, today } from '../lib/terminology'
+import type { Animal, BreedingEvent, Farm, HeatEvent, MatingPlan, PregnancyCheck, StudListing, SynchronizationEvent } from '../types/database'
 
 type ActionKind = 'heat'|'plan'|'sync'|'breed'|'check'|'litter'|null
 
@@ -11,21 +11,22 @@ export default function Reproduction({farm}:{farm:Farm}) {
   const [search] = useSearchParams()
   const [females,setFemales] = useState<Animal[]>([]), [boars,setBoars] = useState<StudListing[]>([])
   const [heats,setHeats] = useState<HeatEvent[]>([]), [plans,setPlans] = useState<MatingPlan[]>([])
-  const [breedings,setBreedings] = useState<BreedingEvent[]>([]), [checks,setChecks] = useState<PregnancyCheck[]>([])
-  const [action,setAction] = useState<{kind:ActionKind;female:Animal|null}>({kind:null,female:null})
+  const [breedings,setBreedings] = useState<BreedingEvent[]>([]), [checks,setChecks] = useState<PregnancyCheck[]>([]),[syncs,setSyncs]=useState<SynchronizationEvent[]>([])
+  const [action,setAction] = useState<{kind:ActionKind;female:Animal|null;presetDate?:string}>({kind:null,female:null})
   const [message,setMessage] = useState('')
 
   async function load() {
-    const [f,b,h,p,be,pc] = await Promise.all([
+    const [f,b,h,p,be,pc,se] = await Promise.all([
       supabase.from('animals').select('*').eq('farm_id',farm.id).in('sex',['sow','gilt']).eq('status','active').order('call_name'),
       supabase.from('stud_listings').select('*').eq('farm_id',farm.id).order('boar_name'),
       supabase.from('heat_events').select('*').eq('farm_id',farm.id).order('observed_date',{ascending:false}),
       supabase.from('mating_plans').select('*,female:animals!mating_plans_female_animal_id_fkey(call_name),sire:stud_listings!mating_plans_selected_stud_listing_id_fkey(boar_name,stud_name)').eq('farm_id',farm.id).order('created_at',{ascending:false}),
       supabase.from('breeding_events').select('*').eq('farm_id',farm.id).order('event_date',{ascending:false}),
       supabase.from('pregnancy_checks').select('*').eq('farm_id',farm.id).order('check_date',{ascending:false}),
+      supabase.from('synchronization_events').select('*').eq('farm_id',farm.id).order('event_date',{ascending:false}),
     ])
     setFemales(f.data||[]); setBoars(b.data||[]); setHeats(h.data||[])
-    setPlans((p.data||[]) as MatingPlan[]); setBreedings(be.data||[]); setChecks(pc.data||[])
+    setPlans((p.data||[]) as MatingPlan[]); setBreedings(be.data||[]); setChecks(pc.data||[]);setSyncs((se.data||[]) as SynchronizationEvent[])
   }
   useEffect(()=>{load()},[farm.id])
   useEffect(()=>{
@@ -37,15 +38,17 @@ export default function Reproduction({farm}:{farm:Farm}) {
   const currentPlan = (id:string) => plans.find(item=>item.female_animal_id===id&&!['farrowed','cancelled','open'].includes(item.status))
   const latestBreeding = (id:string) => breedings.find(item=>item.female_animal_id===id)
   const latestCheck = (id:string) => checks.find(item=>item.female_animal_id===id)
+  const latestSync = (id:string) => syncs.find(item=>item.female_animal_id===id&&item.projected_heat_date)
   const schedule = useMemo(()=>females.map(female=>({
     female,
     heat: latestHeat(female.id),
     plan: currentPlan(female.id),
     breeding: latestBreeding(female.id),
     check: latestCheck(female.id),
-  })).sort((a,b)=>(a.plan?.target_breeding_date||heatWindow(a.heat?.observed_date)?.start||'9999').localeCompare(b.plan?.target_breeding_date||heatWindow(b.heat?.observed_date)?.start||'9999')),[females,heats,plans,breedings,checks])
+    sync: latestSync(female.id),
+  })).sort((a,b)=>(a.plan?.target_breeding_date||a.sync?.projected_heat_date||projectedHeatDate(a.heat?.observed_date)||'9999').localeCompare(b.plan?.target_breeding_date||b.sync?.projected_heat_date||projectedHeatDate(b.heat?.observed_date)||'9999')),[females,heats,plans,breedings,checks,syncs])
 
-  function open(kind:Exclude<ActionKind,null>,female:Animal){setAction({kind,female});setMessage('')}
+  function open(kind:Exclude<ActionKind,null>,female:Animal,presetDate?:string){setAction({kind,female,presetDate});setMessage('')}
   function saved(text:string){setMessage(text);setAction({kind:null,female:null});load()}
 
   return <>
@@ -55,36 +58,36 @@ export default function Reproduction({farm}:{farm:Farm}) {
     <section className="panel schedule-panel">
       <div className="section-heading"><div><h2>Schedule overview</h2><p>Most current information and future planning in one view.</p></div><CalendarClock/></div>
       {schedule.length?<div className="table-wrap borderless"><table className="schedule-table"><thead><tr><th>Sow / gilt</th><th>Last heat</th><th>Next heat window</th><th>Target breeding</th><th>Target / expected farrow</th><th>Boar</th><th>Status</th></tr></thead><tbody>{schedule.map(row=>{
-        const window=heatWindow(row.heat?.observed_date), expected=row.breeding?expectedFarrowDate(row.breeding.event_date.slice(0,10)):null
-        return <tr key={row.female.id}><td><strong>{row.female.call_name}</strong><small>{row.female.sex}</small></td><td>{formatDate(row.heat?.observed_date)}</td><td>{window?`${formatDate(window.start)} - ${formatDate(window.end)}`:'Add a heat'}</td><td>{formatDate(row.plan?.target_breeding_date)}</td><td>{formatDate(expected||row.plan?.target_farrow_date)}</td><td>{row.plan?.sire?.boar_name||boars.find(x=>x.id===row.breeding?.stud_listing_id)?.boar_name||'Not selected'}</td><td><span className="pill">{row.check?.result||row.plan?.status||'tracking'}</span></td></tr>
+        const nextHeat=row.sync?.projected_heat_date||projectedHeatDate(row.heat?.observed_date), expected=row.breeding?expectedFarrowDate(row.breeding.event_date.slice(0,10)):null
+        return <tr key={row.female.id}><td><strong>{row.female.call_name}</strong><small>{row.female.sex}</small></td><td>{row.heat?formatDate(row.heat.observed_date):<button className="table-link" onClick={()=>open('heat',row.female)}>Add a heat</button>}</td><td>{nextHeat?formatDate(nextHeat):<button className="table-link" onClick={()=>open('heat',row.female)}>Add a heat</button>}</td><td>{formatDate(row.plan?.target_breeding_date)}</td><td>{formatDate(expected||row.plan?.target_farrow_date)}</td><td>{row.plan?.sire?.boar_name||boars.find(x=>x.id===row.breeding?.stud_listing_id)?.boar_name||'Not selected'}</td><td><span className="pill">{row.check?.result||row.plan?.status||'tracking'}</span></td></tr>
       })}</tbody></table></div>:<p className="muted">Add a sow or gilt in Herd Animals to begin planning.</p>}
     </section>
 
     <div className="female-list">{females.map(female=>{
-      const heat=latestHeat(female.id), window=heatWindow(heat?.observed_date), plan=currentPlan(female.id), breeding=latestBreeding(female.id), check=latestCheck(female.id)
+      const heat=latestHeat(female.id),sync=latestSync(female.id),nextHeat=sync?.projected_heat_date||projectedHeatDate(heat?.observed_date), plan=currentPlan(female.id), breeding=latestBreeding(female.id), check=latestCheck(female.id)
       return <article className="female-card" id={`female-${female.id}`} key={female.id}>
         <header><div><span className="pill">{female.sex}</span><h2>{female.call_name}</h2><p>{[female.registered_name,female.breed,female.ear_notch].filter(Boolean).join(' • ')||'Registration details not entered'}</p></div><span className="status-badge">{check?.result||plan?.status||female.reproductive_status||'Tracking'}</span></header>
         <div className="female-timeline">
           <TimelineItem label="Last heat" value={formatDate(heat?.observed_date)} detail={heat?.notes||'Observation history'} />
-          <TimelineItem label="Next heat" value={window?`${formatDate(window.start)} - ${formatDate(window.end)}`:'Not projected'} detail={heat?'18-21 day projection':'Record the last heat to project cycles'} />
+          <TimelineItem label="Next heat" value={formatDate(nextHeat)} detail={sync?'Matrix/PG 600 protocol projection':heat?'19 days from last observed heat':'Record the last heat to project cycles'} />
           <TimelineItem label="Target breeding" value={formatDate(plan?.target_breeding_date)} detail={plan?.sire?.boar_name||'Select a boar in the plan'} />
           <TimelineItem label="Farrowing" value={formatDate(breeding?expectedFarrowDate(breeding.event_date.slice(0,10)):plan?.target_farrow_date)} detail={breeding?'114 days from recorded breeding':'Target date'} />
         </div>
-        {heat&&<div className="future-heats"><strong>Future heat planning</strong>{[1,2,3].map(cycle=>{const range=heatWindow(heat.observed_date,cycle);return <span key={cycle}>{cycle===1?'Next':`Cycle ${cycle}`}: {range&&`${formatDate(range.start)} - ${formatDate(range.end)}`}</span>})}</div>}
+        {heat&&<div className="future-heats"><strong>Future heat planning</strong>{[1,2,3].map(cycle=>{const date=projectedHeatDate(heat.observed_date,cycle);return <button type="button" key={cycle} onClick={()=>date&&open('plan',female,date)}><span>{cycle===1?'Next':`Cycle ${cycle}`}</span><strong>{formatDate(date)}</strong><small>Select for Target Breeding</small></button>})}</div>}
         <div className="female-actions"><button onClick={()=>open('heat',female)}><Flame/> Add heat</button><button onClick={()=>open('plan',female)}><CalendarClock/> Plan mating</button><button onClick={()=>open('sync',female)}><Syringe/> Sync record</button><button onClick={()=>open('breed',female)}><Dna/> Record breeding</button><button onClick={()=>open('check',female)}><CheckCircle2/> Pregnancy check</button><button className="farrow-action" onClick={()=>open('litter',female)}><Baby/> Add litter / farrowing</button></div>
       </article>
     })}</div>
     {!females.length&&<section className="empty"><div><Dna/></div><h2>No breeding females entered</h2><p>Add a sow or gilt under Animals. She will automatically appear here.</p></section>}
 
-    {action.kind&&action.female&&<ActionModal kind={action.kind} female={action.female} farm={farm} boars={boars} plans={plans.filter(x=>x.female_animal_id===action.female?.id)} lastHeat={latestHeat(action.female.id)} close={()=>setAction({kind:null,female:null})} saved={saved}/>} 
+    {action.kind&&action.female&&<ActionModal kind={action.kind} female={action.female} farm={farm} boars={boars} plans={plans.filter(x=>x.female_animal_id===action.female?.id)} lastHeat={latestHeat(action.female.id)} presetDate={action.presetDate} close={()=>setAction({kind:null,female:null})} saved={saved}/>} 
   </>
 }
 
 function TimelineItem({label,value,detail}:{label:string;value:string;detail:string}){return <div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>}
 
-function ActionModal({kind,female,farm,boars,plans,lastHeat,close,saved}:{kind:Exclude<ActionKind,null>;female:Animal;farm:Farm;boars:StudListing[];plans:MatingPlan[];lastHeat?:HeatEvent;close:()=>void;saved:(m:string)=>void}){
+function ActionModal({kind,female,farm,boars,plans,lastHeat,presetDate,close,saved}:{kind:Exclude<ActionKind,null>;female:Animal;farm:Farm;boars:StudListing[];plans:MatingPlan[];lastHeat?:HeatEvent;presetDate?:string;close:()=>void;saved:(m:string)=>void}){
   if(kind==='heat')return <HeatModal female={female} farm={farm} close={close} saved={saved}/>
-  if(kind==='plan')return <PlanModal female={female} farm={farm} boars={boars} lastHeat={lastHeat} close={close} saved={saved}/>
+  if(kind==='plan')return <PlanModal female={female} farm={farm} boars={boars} lastHeat={lastHeat} presetDate={presetDate} close={close} saved={saved}/>
   if(kind==='sync')return <SyncModal female={female} farm={farm} plans={plans} close={close} saved={saved}/>
   if(kind==='breed')return <BreedModal female={female} farm={farm} boars={boars} plans={plans} close={close} saved={saved}/>
   if(kind==='check')return <CheckModal female={female} farm={farm} plans={plans} close={close} saved={saved}/>
@@ -93,21 +96,24 @@ function ActionModal({kind,female,farm,boars,plans,lastHeat,close,saved}:{kind:E
 
 function HeatModal({female,farm,close,saved}:{female:Animal;farm:Farm;close:()=>void;saved:(m:string)=>void}){
   const[date,setDate]=useState(today()),[standing,setStanding]=useState(true),[source,setSource]=useState('observed'),[notes,setNotes]=useState(''),[error,setError]=useState('')
-  async function submit(e:FormEvent){e.preventDefault();const{error}=await supabase.from('heat_events').insert({farm_id:farm.id,female_animal_id:female.id,observed_date:date,standing_heat:standing,source,notes:notes||null});if(error)setError(error.message);else{const range=heatWindow(date);saved(`Heat saved for ${female.call_name}. Next projected window: ${formatDate(range?.start)} - ${formatDate(range?.end)}.`)}}
+  async function submit(e:FormEvent){e.preventDefault();const{error}=await supabase.from('heat_events').insert({farm_id:farm.id,female_animal_id:female.id,observed_date:date,standing_heat:standing,source,notes:notes||null});if(error)setError(error.message);else saved(`Heat saved for ${female.call_name}. Next projected heat: ${formatDate(projectedHeatDate(date))}.`)}
   return <Modal title={`Add heat - ${female.call_name}`} close={close}><form onSubmit={submit} className="form-grid"><Input label="Observed date" type="date" value={date} onChange={setDate} required/><label>Observation type<select value={source} onChange={e=>setSource(e.target.value)}><option value="observed">Observed naturally</option><option value="projected_confirmed">Projected and confirmed</option><option value="hormone_induced">Hormone induced</option></select></label><label className="check-label"><input type="checkbox" checked={standing} onChange={e=>setStanding(e.target.checked)}/> Standing heat observed</label><div/><label className="full">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)}/></label>{error&&<p className="error full">{error}</p>}<Actions close={close} label="Save heat"/></form></Modal>
 }
 
-function PlanModal({female,farm,boars,lastHeat,close,saved}:{female:Animal;farm:Farm;boars:StudListing[];lastHeat?:HeatEvent;close:()=>void;saved:(m:string)=>void}){
-  const[farrow,setFarrow]=useState(''),[boar,setBoar]=useState(''),[name,setName]=useState(`${female.call_name} mating plan`),[objectives,setObjectives]=useState(''),[notes,setNotes]=useState(''),[error,setError]=useState('')
-  const breedDate=farrow?targetBreedingDate(farrow):'', projected=lastHeat?heatWindow(lastHeat.observed_date):null
-  async function submit(e:FormEvent){e.preventDefault();const{error}=await supabase.from('mating_plans').insert({farm_id:farm.id,female_animal_id:female.id,plan_name:name||`${female.call_name} plan`,target_farrow_date:farrow,target_breeding_date:breedDate,selected_stud_listing_id:boar||null,status:'planned',objectives:objectives||null,notes:notes||null});if(error)setError(error.message);else saved(`Plan saved for ${female.call_name}. Target breeding date: ${formatDate(breedDate)}.`)}
-  return <Modal title={`Plan mating - ${female.call_name}`} close={close}><form onSubmit={submit} className="form-grid"><Input label="Plan name" value={name} onChange={setName}/><Input label="Target farrow date" type="date" value={farrow} onChange={setFarrow} required/><label>Target breeding date<input value={breedDate} readOnly placeholder="Calculated at 114 days"/></label><label>Selected boar<select value={boar} onChange={e=>setBoar(e.target.value)}><option value="">Decide later</option>{boars.map(x=><option value={x.id} key={x.id}>{x.boar_name} - {x.stud_name}</option>)}</select></label>{projected&&<p className="notice full">Current next-heat projection: {formatDate(projected.start)} - {formatDate(projected.end)}. Compare this window with the calculated target breeding date.</p>}<label className="full">Breeding objectives<textarea value={objectives} onChange={e=>setObjectives(e.target.value)}/></label><label className="full">Planning notes<textarea value={notes} onChange={e=>setNotes(e.target.value)}/></label>{error&&<p className="error full">{error}</p>}<Actions close={close} label="Save plan"/></form></Modal>
+function PlanModal({female,farm,boars,lastHeat,presetDate,close,saved}:{female:Animal;farm:Farm;boars:StudListing[];lastHeat?:HeatEvent;presetDate?:string;close:()=>void;saved:(m:string)=>void}){
+  const[breedDate,setBreedDate]=useState(presetDate||''),[farrow,setFarrow]=useState(presetDate?expectedFarrowDate(presetDate):''),[boar,setBoar]=useState(''),[name,setName]=useState(`${female.call_name} mating plan`),[objectives,setObjectives]=useState(''),[notes,setNotes]=useState(''),[error,setError]=useState('')
+  const projected=lastHeat?projectedHeatDate(lastHeat.observed_date):null
+  function changeBreed(value:string){setBreedDate(value);setFarrow(value?expectedFarrowDate(value):'')}
+  function changeFarrow(value:string){setFarrow(value);setBreedDate(value?targetBreedingDate(value):'')}
+  async function submit(e:FormEvent){e.preventDefault();if(!breedDate&&!farrow){setError('Enter either a Target Breeding Date or Target Farrow Date.');return}const{error}=await supabase.from('mating_plans').insert({farm_id:farm.id,female_animal_id:female.id,plan_name:name||`${female.call_name} plan`,target_farrow_date:farrow||null,target_breeding_date:breedDate||null,selected_stud_listing_id:boar||null,status:'planned',objectives:objectives||null,notes:notes||null});if(error)setError(error.message);else saved(`Plan saved for ${female.call_name}. Target breeding: ${formatDate(breedDate)}; target farrowing: ${formatDate(farrow)}.`)}
+  return <Modal title={`Plan mating - ${female.call_name}`} close={close}><form onSubmit={submit} className="form-grid"><Input label="Plan name" value={name} onChange={setName}/><label>Selected boar<select value={boar} onChange={e=>setBoar(e.target.value)}><option value="">Decide later</option>{boars.map(x=><option value={x.id} key={x.id}>{x.boar_name} - {x.stud_name}</option>)}</select></label><Input label="Target breeding date" type="date" value={breedDate} onChange={changeBreed}/><Input label="Target farrow date" type="date" value={farrow} onChange={changeFarrow}/>{projected&&<p className="notice full">Next heat is projected for {formatDate(projected)} (19 days after the last observed heat). Selecting a Future Heat Planning date opens this form with that date already entered.</p>}<label className="full">Breeding objectives<textarea value={objectives} onChange={e=>setObjectives(e.target.value)}/></label><label className="full">Planning notes<textarea value={notes} onChange={e=>setNotes(e.target.value)}/></label>{error&&<p className="error full">{error}</p>}<Actions close={close} label="Save plan"/></form></Modal>
 }
 
 function SyncModal({female,farm,plans,close,saved}:{female:Animal;farm:Farm;plans:MatingPlan[];close:()=>void;saved:(m:string)=>void}){
-  const[date,setDate]=useState(nowLocal()),[plan,setPlan]=useState(plans[0]?.id||''),[protocol,setProtocol]=useState('Matrix synchronization'),[product,setProduct]=useState('Matrix'),[dose,setDose]=useState(''),[notes,setNotes]=useState(''),[error,setError]=useState('')
-  async function submit(e:FormEvent){e.preventDefault();const{error}=await supabase.from('synchronization_events').insert({farm_id:farm.id,breeding_cycle_id:null,female_animal_id:female.id,mating_plan_id:plan||null,event_date:new Date(date).toISOString(),protocol_name:protocol,product_name:product,dose:dose||null,notes:notes||null});if(error)setError(error.message);else saved(`Synchronization record saved for ${female.call_name}.`)}
-  return <Modal title={`Synchronization - ${female.call_name}`} close={close}><form onSubmit={submit} className="form-grid"><Input label="Date and time" type="datetime-local" value={date} onChange={setDate}/><PlanSelect plans={plans} value={plan} onChange={setPlan}/><Input label="Protocol" value={protocol} onChange={setProtocol}/><Input label="Product" value={product} onChange={setProduct}/><Input label="Dose" value={dose} onChange={setDose}/><div/><label className="full">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)}/></label>{error&&<p className="error full">{error}</p>}<Actions close={close} label="Save record"/></form></Modal>
+  const[start,setStart]=useState(today()),[plan,setPlan]=useState(plans[0]?.id||''),[protocol,setProtocol]=useState('matrix_pg600'),[notes,setNotes]=useState(''),[error,setError]=useState('')
+  const pgDate=addDays(start,14),nextHeat=addDays(pgDate,4),breedDate=addDays(nextHeat,1),farrowDate=expectedFarrowDate(breedDate)
+  async function submit(e:FormEvent){e.preventDefault();let planId=plan||null;if(planId){const{error}=await supabase.from('mating_plans').update({target_breeding_date:breedDate,target_farrow_date:farrowDate,status:'planned'}).eq('id',planId);if(error){setError(error.message);return}}else{const{data,error}=await supabase.from('mating_plans').insert({farm_id:farm.id,female_animal_id:female.id,plan_name:`${female.call_name} Matrix/PG 600 plan`,target_breeding_date:breedDate,target_farrow_date:farrowDate,status:'planned'}).select('id').single();if(error||!data){setError(error?.message||'Mating plan could not be created.');return}planId=data.id}const{error}=await supabase.from('synchronization_events').insert({farm_id:farm.id,breeding_cycle_id:null,female_animal_id:female.id,mating_plan_id:planId,event_date:`${start}T12:00:00`,protocol_name:'Matrix/PG 600',product_name:'Matrix + PG 600',protocol_code:protocol,matrix_start_date:start,pg600_date:pgDate,projected_heat_date:nextHeat,notes:notes||null});if(error)setError(error.message);else saved(`Matrix/PG 600 schedule saved. Next heat: ${formatDate(nextHeat)}; target breeding: ${formatDate(breedDate)}; target farrowing: ${formatDate(farrowDate)}.`)}
+  return <Modal title={`Synchronization - ${female.call_name}`} close={close}><form onSubmit={submit} className="form-grid"><label>Protocol<select value={protocol} onChange={e=>setProtocol(e.target.value)}><option value="matrix_pg600">Matrix/PG 600</option></select></label><Input label="Matrix Day 1" type="date" value={start} onChange={setStart}/><PlanSelect plans={plans} value={plan} onChange={setPlan}/><div/><div className="protocol-calendar full">{Array.from({length:15},(_,index)=>{const day=index+1,date=addDays(start,index);return <div className={day===15?'pg-day':''} key={day}><strong>Day {day}</strong><span>{day===15?'PG 600':'Matrix'}</span><small>{formatDate(date)}</small></div>})}</div><div className="protocol-results full"><span><small>Next Heat</small><strong>{formatDate(nextHeat)}</strong></span><span><small>Target Breeding</small><strong>{formatDate(breedDate)}</strong></span><span><small>Target Farrowing</small><strong>{formatDate(farrowDate)}</strong></span></div><label className="full">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)}/></label>{error&&<p className="error full">{error}</p>}<Actions close={close} label="Save protocol"/></form></Modal>
 }
 
 function BreedModal({female,farm,boars,plans,close,saved}:{female:Animal;farm:Farm;boars:StudListing[];plans:MatingPlan[];close:()=>void;saved:(m:string)=>void}){

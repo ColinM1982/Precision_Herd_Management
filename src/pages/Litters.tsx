@@ -6,24 +6,26 @@ import { formatDate } from '../lib/terminology'
 import type { Farm, OffspringGroup } from '../types/database'
 
 export default function Litters({farm}:{farm:Farm}) {
-  const [litters,setLitters]=useState<OffspringGroup[]>([])
+  const [litters,setLitters]=useState<OffspringGroup[]>([]),[earned,setEarned]=useState<Record<string,number>>({})
   async function load(){
     const [{data:groups},{data:pigs}] = await Promise.all([
       supabase.from('offspring_groups').select('*,birth_event:birth_events!offspring_groups_birth_event_id_fkey(*,female:animals!birth_events_female_animal_id_fkey(*)),sire:stud_listings!offspring_groups_sire_listing_id_fkey(*)').eq('farm_id',farm.id).is('archived_at',null).order('birth_date',{ascending:false}),
-      supabase.from('litter_pigs').select('offspring_group_id').eq('farm_id',farm.id),
+      supabase.from('litter_pigs').select('offspring_group_id,status,sale_price').eq('farm_id',farm.id),
     ])
     const counts=(pigs||[]).reduce<Record<string,number>>((all,row)=>({...all,[row.offspring_group_id]:(all[row.offspring_group_id]||0)+1}),{})
     setLitters((groups||[]).map(group=>({...group,pig_count:counts[group.id]||0})) as OffspringGroup[])
+    setEarned((pigs||[]).reduce<Record<string,number>>((all,row)=>{if(row.status==='sold')all[row.offspring_group_id]=(all[row.offspring_group_id]||0)+Number(row.sale_price||0);return all},{}))
   }
   useEffect(()=>{load()},[farm.id])
   return <>
     <div className="page-head"><div><p className="eyebrow">SEPARATE OFFSPRING RECORDS</p><h1>Litters</h1></div></div>
-    <p className="lead">Litter pigs stay here until you deliberately move an individual animal into the managed herd. Completed litters can be moved to Outside the Herd.</p>
+    <p className="lead">Litter pigs stay here until you deliberately move an individual animal into the managed herd. Completed litters can be moved to Archived Animals/Litters.</p>
     {litters.length?<div className="litter-grid">{litters.map(litter=>{
       const birth=litter.birth_event
       return <Link to={`/litters/${litter.id}`} className="litter-card" key={litter.id}>
-        <div className="litter-icon"><Baby/></div><div className="litter-card-main"><span className="pill">{litter.registry_association||'Unregistered'}</span><h2>{litter.group_name}</h2><p>{birth?.female?.call_name||'Dam not recorded'} × {litter.sire?.boar_name||'Sire not recorded'}</p><div className="litter-metrics"><span><strong>{litter.pig_count||0}</strong> pig records</span><span><strong>{birth?.born_alive??'—'}</strong> born alive</span><span><strong>{formatDate(litter.birth_date)}</strong> farrowed</span></div></div><ChevronRight/>
+        <div className="litter-icon"><Baby/></div><div className="litter-card-main"><span className="pill">{litter.registry_association||'Unregistered'}</span><h2>{litter.group_name}</h2><p>{birth?.female?.call_name||'Dam not recorded'} × {litter.sire?.boar_name||'Sire not recorded'}</p><div className="litter-metrics"><span><strong>{litter.pig_count||0}</strong> pig records</span><span><strong>{birth?.born_alive??'—'}</strong> born alive</span><span><strong>{formatDate(litter.birth_date)}</strong> farrowed</span><span><strong>{currency(earned[litter.id]||0)}</strong> Total $ earned</span></div></div><ChevronRight/>
       </Link>
     })}</div>:<section className="empty"><div><Baby/></div><h2>No litters recorded</h2><p>Use Add litter / farrowing under Reproduction for any sow or gilt.</p></section>}
   </>
 }
+function currency(value:number){return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(value)}

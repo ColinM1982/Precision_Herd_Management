@@ -1,6 +1,7 @@
 export const SWINE_GESTATION_DAYS = 114
 export const SWINE_HEAT_MIN_DAYS = 18
 export const SWINE_HEAT_MAX_DAYS = 21
+export const SWINE_HEAT_CYCLE_DAYS = 19
 
 export function addDays(date: string, days: number) {
   const value = new Date(`${date}T12:00:00`)
@@ -21,6 +22,10 @@ export function heatWindow(lastHeat?: string | null, cycle = 1) {
     start: addDays(lastHeat, SWINE_HEAT_MIN_DAYS * cycle),
     end: addDays(lastHeat, SWINE_HEAT_MAX_DAYS * cycle),
   }
+}
+
+export function projectedHeatDate(lastHeat?: string | null, cycle = 1) {
+  return lastHeat ? addDays(lastHeat, SWINE_HEAT_CYCLE_DAYS * cycle) : null
 }
 
 export function targetBreedingDate(targetFarrowDate: string) {
